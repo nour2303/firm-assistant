@@ -1,0 +1,1141 @@
+{
+  "name": "Firm Assistant - Evals",
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d3436ea5-967d-498f-ba72-6ef28879d811",
+              "name": "output",
+              "value": "={{ $('Firm Assistant Agent').first().json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        624,
+        128
+      ],
+      "name": "Return Agent Answer"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "319d741e-840d-49df-9f64-31cba23e9bfb",
+              "name": "chatInput",
+              "value": "={{ $json.question }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -208,
+        112
+      ],
+      "name": "Prepare Agent Input"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "=You are the front-desk assistant for Harlow & Bright LLP, a law firm.\n\nYou have access to one tool: a knowledge base search over the firm's FAQ, \npolicies, and client contracts.\n\nRules:\n1. Only answer using information returned by the knowledge base tool. Do not \n   use outside knowledge about legal matters.\n2. Every fact you state must come from a single, clearly identified source \n   document. Before answering, check which document each retrieved chunk \n   came from (see its metadata/source).\n3. Never combine or blend clauses from two different contracts into one \n   answer unless the user explicitly asked you to compare multiple documents.\n4. Always name the specific document your answer is based on (e.g. \"Per the \n   Meridian Retainer Agreement...\").\n5. If retrieved chunks come from multiple documents and you're unsure which \n   one actually answers the question, say so explicitly rather than picking \n   one silently.\n6. If the knowledge base doesn't contain a clear answer, say you don't know \n   rather than guessing."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        256,
+        112
+      ],
+      "name": "Firm Assistant Agent"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        224
+      ],
+      "name": "Agent Chat Model"
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "={{ $json.chatInput }}",
+        "tableName": {
+          "__rl": true,
+          "value": "rpc/match_documents",
+          "mode": "list",
+          "cachedResultName": "rpc/match_documents"
+        },
+        "includeDocumentMetadata": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        448,
+        272
+      ],
+      "name": "RAG Knowledge Tool"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        272,
+        384
+      ],
+      "name": "RAG Embeddings"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.question }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You convert user questions into safe PostgreSQL SELECT queries.  Database schema:  clients(id, name, client_type, status) attorneys(id, name, role) cases(id, client_id, attorney_id, matter_no, case_type, status, opened_date, target_close_date)  Relationships: cases.client_id = clients.id cases.attorney_id = attorneys.id  Rules: - Return SQL only. - Only generate SELECT queries. - Do not use INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, CREATE. - Do not explain anything. - Use table names exactly as shown.\n- Do not wrap the SQL in markdown.\n- Do not use ```sql or ``` backticks.\n- Do not include a semicolon at the end.\n- If the user asks to delete, update, insert, create, drop, alter, or modify data, return exactly: BLOCKED\n- When matching client/company names, use ILIKE with wildcards instead of exact equality.\n  Example: clients.name ILIKE '%Nova Ridge%'"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -576,
+        640
+      ],
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_SUPABASE_PROJECT.supabase.co/rest/v1/rpc/run_readonly_sql",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": ""
+            },
+            {
+              "name": "Authorization",
+              "value": ""
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -80,
+        656
+      ],
+      "name": "HTTP Request",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a89a6118-ea28-468f-94ee-9aa588247319",
+              "name": "output",
+              "value": "={{ Object.keys($json).length === 0 ? 'not found' : Object.values($json).map(v => String(v)).join(' ') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        144,
+        784
+      ],
+      "name": "sql return result"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e1f26ba3-9979-48dc-a614-a29c630da7f3",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "BLOCKED",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -272,
+        640
+      ],
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "662a8f6e-cf83-4ab0-b8c9-9d93712ab21e",
+              "name": "output",
+              "value": "Blocked: only read-only database questions are allowed.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        0,
+        496
+      ],
+      "name": "Return Blocked Message"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ba4956b4-9fd8-4807-83fc-9a78bf5b9e25",
+              "leftValue": "={{\n  !(\n    $json.question.toLowerCase().includes('active cases') ||\n    $json.question.toLowerCase().includes('attorney') ||\n    $json.question.toLowerCase().includes('attorneys') ||\n    $json.question.toLowerCase().includes('target close date') ||\n    $json.question.toLowerCase().includes('who handles') ||\n    $json.question.toLowerCase().includes('clients') ||\n    $json.question.toLowerCase().includes('cases') ||\n    $json.question.toLowerCase().includes('delete') ||\n    $json.question.toLowerCase().includes('update') ||\n    $json.question.toLowerCase().includes('insert') ||\n    $json.question.toLowerCase().includes('drop')\n  )\n}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -576,
+        160
+      ],
+      "name": "Question Type?"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "eval_tests",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        160
+      ],
+      "name": "Get Eval Tests"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1472,
+        160
+      ],
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "96fc40dc-25db-47fe-af06-8da25c4aa08b",
+              "leftValue": "={{ $json.text === 'PASS' }}",
+              "rightValue": "={{ $('Get Eval Tests').item.json.expected_answer }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1216,
+        112
+      ],
+      "name": "RAG Eval Pass?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f97ed016-fc91-4c47-b804-1c5b09971805",
+              "name": "passed",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "eba9898e-24d2-4a1a-8526-8bcf9a665ba9",
+              "name": "actual_route",
+              "value": "RAG",
+              "type": "string"
+            },
+            {
+              "id": "cac3fa26-e0b6-4f9f-bbf6-b7de4c8760d6",
+              "name": "actual_answer",
+              "value": "={{ $('Return Agent Answer').first().json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1472,
+        64
+      ],
+      "name": "RAG PASS"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "de7b6cc1-2f4b-4420-8525-d79232bd5e0e",
+              "name": "passed",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "97a5798b-0a5a-48dd-b9cd-dc11cdaf59b1",
+              "name": "actual_route",
+              "value": "RAG",
+              "type": "string"
+            },
+            {
+              "id": "b6218150-2ff3-4555-9fe5-6a0beee949da",
+              "name": "actual_answer",
+              "value": "={{ $('Return Agent Answer').first().json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1424,
+        224
+      ],
+      "name": "RAG FAIL"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "eval_tests",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Loop Over Items').item.json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "actual_answer",
+              "fieldValue": "={{ $json.actual_answer }}"
+            },
+            {
+              "fieldId": "actual_route",
+              "fieldValue": "={{ $json.actual_route }}"
+            },
+            {
+              "fieldId": "passed",
+              "fieldValue": "={{ $json.passed }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1712,
+        160
+      ],
+      "name": "Save RAG Eval Result"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "916a1c4a-e40c-4582-b0bd-1a8a8b5d1158",
+              "leftValue": "={{\n  String($json.output).includes(String($('Loop Over Items').item.json.expected_answer))\n  &&\n  $('Loop Over Items').item.json.expected_route === 'SQL'\n}}",
+              "rightValue": "={{ String($json.output).includes(String($('Get Eval Tests').all()[1].json.expected_answer)) }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        368,
+        784
+      ],
+      "name": "SQL Eval Pass?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f97ed016-fc91-4c47-b804-1c5b09971805",
+              "name": "passed",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "eba9898e-24d2-4a1a-8526-8bcf9a665ba9",
+              "name": "actual_route",
+              "value": "SQL",
+              "type": "string"
+            },
+            {
+              "id": "cac3fa26-e0b6-4f9f-bbf6-b7de4c8760d6",
+              "name": "actual_answer",
+              "value": "={{ $('sql return result').first().json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        592,
+        704
+      ],
+      "name": "SQL PASS"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "de7b6cc1-2f4b-4420-8525-d79232bd5e0e",
+              "name": "passed",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "97a5798b-0a5a-48dd-b9cd-dc11cdaf59b1",
+              "name": "actual_route",
+              "value": "SQL",
+              "type": "string"
+            },
+            {
+              "id": "b6218150-2ff3-4555-9fe5-6a0beee949da",
+              "name": "actual_answer",
+              "value": "={{ $('sql return result').first().json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        592,
+        896
+      ],
+      "name": "SQL FAIL"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "bd2fc84e-ffd2-4da8-a38c-539ed8c15810",
+              "leftValue": "={{\n  String($json.output).includes(String($('Loop Over Items').item.json.expected_answer))\n  &&\n  $('Loop Over Items').item.json.expected_route === 'BLOCKED'\n}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        208,
+        512
+      ],
+      "name": "Blocked Eval Pass?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f97ed016-fc91-4c47-b804-1c5b09971805",
+              "name": "passed",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "eba9898e-24d2-4a1a-8526-8bcf9a665ba9",
+              "name": "actual_route",
+              "value": "BLOCKED",
+              "type": "string"
+            },
+            {
+              "id": "cac3fa26-e0b6-4f9f-bbf6-b7de4c8760d6",
+              "name": "actual_answer",
+              "value": "={{ $('Return Blocked Message').first().json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        432
+      ],
+      "name": "BLOCKED PASS"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "de7b6cc1-2f4b-4420-8525-d79232bd5e0e",
+              "name": "passed",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "97a5798b-0a5a-48dd-b9cd-dc11cdaf59b1",
+              "name": "actual_route",
+              "value": "BLOCKED",
+              "type": "string"
+            },
+            {
+              "id": "b6218150-2ff3-4555-9fe5-6a0beee949da",
+              "name": "actual_answer",
+              "value": "={{ $('Return Blocked Message').first().json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        592
+      ],
+      "name": "BLOCKED FAIL"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "eval_tests",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Loop Over Items').item.json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "actual_answer",
+              "fieldValue": "={{ $json.actual_answer }}"
+            },
+            {
+              "fieldId": "actual_route",
+              "fieldValue": "={{ $json.actual_route }}"
+            },
+            {
+              "fieldId": "passed",
+              "fieldValue": "={{ $json.passed }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        704,
+        480
+      ],
+      "name": "Save Blocked Eval Result"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -992,
+        160
+      ],
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -784,
+        160
+      ],
+      "name": "Wait"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "eval_tests",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Loop Over Items').item.json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "actual_answer",
+              "fieldValue": "={{ $json.actual_answer }}"
+            },
+            {
+              "fieldId": "actual_route",
+              "fieldValue": "={{ $json.actual_route }}"
+            },
+            {
+              "fieldId": "passed",
+              "fieldValue": "={{ $json.passed }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        832,
+        816
+      ],
+      "name": "Save SQL Eval Result1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Evaluate the current test case.",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are evaluating whether an AI assistant's answer is semantically correct.  Question: {{ $('Loop Over Items').item.json.question }}  Expected answer/meaning: {{ $('Loop Over Items').item.json.expected_answer }}  Actual answer: {{ $('Return Agent Answer').first().json.output }}  Judge whether the actual answer matches the expected meaning, even if the wording is different.  Return only one word: PASS or FAIL"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        880,
+        112
+      ],
+      "name": "Eval LLM Chain"
+    }
+  ],
+  "connections": {
+    "Prepare Agent Input": {
+      "main": [
+        [
+          {
+            "node": "Firm Assistant Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Firm Assistant Agent": {
+      "main": [
+        [
+          {
+            "node": "Return Agent Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Firm Assistant Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Eval LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG Knowledge Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Firm Assistant Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG Embeddings": {
+      "ai_embedding": [
+        [
+          {
+            "node": "RAG Knowledge Tool",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "sql return result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Return Blocked Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Question Type?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Agent Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Eval Tests": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get Eval Tests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return Agent Answer": {
+      "main": [
+        [
+          {
+            "node": "Eval LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG Eval Pass?": {
+      "main": [
+        [
+          {
+            "node": "RAG PASS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "RAG FAIL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG FAIL": {
+      "main": [
+        [
+          {
+            "node": "Save RAG Eval Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG PASS": {
+      "main": [
+        [
+          {
+            "node": "Save RAG Eval Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "sql return result": {
+      "main": [
+        [
+          {
+            "node": "SQL Eval Pass?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL Eval Pass?": {
+      "main": [
+        [
+          {
+            "node": "SQL PASS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SQL FAIL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL PASS": {
+      "main": [
+        [
+          {
+            "node": "Save SQL Eval Result1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL FAIL": {
+      "main": [
+        [
+          {
+            "node": "Save SQL Eval Result1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return Blocked Message": {
+      "main": [
+        [
+          {
+            "node": "Blocked Eval Pass?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Blocked Eval Pass?": {
+      "main": [
+        [
+          {
+            "node": "BLOCKED PASS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "BLOCKED FAIL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BLOCKED FAIL": {
+      "main": [
+        [
+          {
+            "node": "Save Blocked Eval Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BLOCKED PASS": {
+      "main": [
+        [
+          {
+            "node": "Save Blocked Eval Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Question Type?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save RAG Eval Result": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Blocked Eval Result": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save SQL Eval Result1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eval LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "RAG Eval Pass?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}
