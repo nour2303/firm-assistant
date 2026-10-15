@@ -15,9 +15,9 @@ flowchart LR
     A --> L[Log and review]
 ```
 
-## Reported evaluation
+## Evaluation tests
 
-The project summary reports **12 of 12 cases passed** on its own evaluation set. The cases and execution logs were not supplied with this repository, so that figure is a narrow self-reported result, not an audited accuracy or security rate.
+The project summary describes evaluation tests for the assistant's responses and request handling. The test cases and execution logs are not included here, so this repository does not claim an independently verified reliability rate.
 
 ## Design boundaries and limits
 
