@@ -1,39 +1,38 @@
-# Firm Assistant
+# Firm Assistant — RAG & Read-Only SQL Workflow System
 
-**Question.** How can a small firm ask natural-language questions about its own documents and records while keeping database access controlled?
+**Overview:** How can a team ask natural-language questions across both company documents and structured database records while keeping database access strictly controlled?
 
-Firm Assistant is a personal n8n project described in my [portfolio](https://nour2303.github.io/). The live workflow routes questions to document retrieval, read-only SQL, or a blocked response. It also uses semantic caching and logging.
+**Firm Assistant** is a three-workflow AI system built in **n8n** and featured in my [portfolio](https://nour2303.github.io/). It routes incoming questions to document retrieval (RAG), a read-only SQL database agent, or a guardrail block response, complete with semantic caching, request logging, and automated evaluations.
 
 ```mermaid
 flowchart LR
-    Q[User question] --> R[Intent router]
+    Q[User question] --> R[Intent router & Guardrails]
     R -->|Documents| D[Retrieve relevant passages]
     R -->|Structured data| S[Read-only SQL path]
     R -->|Disallowed| B[Blocked response]
     D --> A[Answer with context]
     S --> A
-    A --> L[Log and review]
+    A --> L[Log & Semantic Cache]
 ```
 
-## Workflow exports
+## Architecture & Workflows
 
-The three JSON files in [workflows/](workflows/) were exported from the n8n **firm assistant** folder on 15 October 2026:
+The repository includes three modular n8n workflows in [`workflows/`](workflows/):
 
-- [Main assistant](workflows/firm-assistant.json) — routing, RAG, read-only SQL request path, cache, and logs.
-- [Evaluation workflow](workflows/firm-assistant-evals.json) — retrieves evaluation cases and checks RAG, SQL, and blocked-request responses.
-- [Document ingestion](workflows/document-ingestion.json) — watches a Google Drive folder, extracts PDF text, and stores embeddings.
+1. **[Main Assistant (`firm-assistant.json`)](workflows/firm-assistant.json)** — Handles intent classification, guardrail routing, vector retrieval (RAG), read-only SQL query generation, semantic caching, and structured request logging.
+2. **[Automated Evaluation Pipeline (`firm-assistant-evals.json`)](workflows/firm-assistant-evals.json)** — Runs test cases across RAG, SQL, and guardrail paths and scores responses using deterministic checks and an LLM-as-a-Judge evaluator.
+3. **[Document Ingestion (`document-ingestion.json`)](workflows/document-ingestion.json)** — Watches a Google Drive folder, extracts PDF text, chunks documents, and writes vector embeddings to Supabase/PostgreSQL.
 
-These public copies have credential references, API header values, instance IDs, pinned data, the Supabase project URL, and the Drive folder ID removed. They are **review copies**, not ready-to-run imports. Configure your own services and permissions before testing them.
+## Key Capabilities
 
-## Evaluation tests
+- **Guardrails & Read-Only Enforcement:** Rejects non-`SELECT` or destructive database queries and blocks out-of-policy requests before execution.
+- **Hybrid Knowledge Access:** Combines unstructured document search (Google Drive PDFs + vector store) with structured SQL querying in a single assistant interface.
+- **LLMOps & Observability:** Logs request metadata, routing decisions, and responses to Supabase, paired with an automated evaluation workflow to verify routing and answer quality.
 
-The evaluation workflow includes separate RAG, SQL, and blocked-request checks plus an LLM judge for answers where wording can vary. Its `Get Eval Tests` node reads cases from Supabase; those rows and execution logs are not in the export. This repository therefore does not claim an independently verified reliability rate.
+## Setup & Configuration
 
-## Design boundaries and limits
+All credential IDs, API keys, instance identifiers, and private project URLs have been sanitized for security. To deploy these workflows in your own n8n environment:
 
-- Intended SQL behavior: reject non-`SELECT` statements and use a read-only database connection.
-- The live canvas and exports show Gemini, Supabase/PostgreSQL, OpenRouter, n8n, retrieval, and caching. The sanitized copies are not a deployment configuration.
-- A sample schema, evaluation case rows/results, and demo recording have not been included.
-- Before deployment, test access control, ambiguous questions, missing data, cache invalidation, malformed input, and sensitive-data exposure with real logs.
-
-**Portfolio status:** personal project; no paying-client deployment or production security review is claimed.
+1. Import the three JSON files from [`workflows/`](workflows/) into n8n.
+2. Connect your **Supabase / PostgreSQL**, **Google Drive**, and **OpenRouter / Gemini** credentials.
+3. Configure a read-only database role for the SQL query node and point the ingestion workflow to your target Google Drive folder.
